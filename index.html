@@ -179,7 +179,7 @@ function showParent(){
   years.forEach(y=>{html+=`<div class="yr">ปีการศึกษา ${esc(y)}</div>`;
    ROWS.filter(r=>r.year===y).sort(bySort).forEach(r=>{const t=r.edu+r.assoc,p=t?Math.round((t-r.due)/t*100):0,st=status(r.due,t);
     html+=`<div class="term"><b>ภาคเรียนที่ ${esc(r.term)}</b><span class="r"><span class="tag ${st}">${LABEL[st]}</span></span>
-     <small>บำรุงการศึกษา ${fmt(r.edu)} · บำรุงสมาคม ${fmt(r.assoc)}</small><span class="r"><b>${r.due>0?"ค้าง "+fmt(r.due):"ครบแล้ว"}</b></span>
+     <small>บำรุงการศึกษา ${fmt(r.edu)} · บำรุงสมาคม ${fmt(r.assoc)} · จ่ายแล้ว ${fmt(r.paid)}</small><span class="r"><b>${r.due>0?"ค้าง "+fmt(r.due):"ครบแล้ว"}</b></span>
      <div class="mini"><i style="width:${p}%"></i></div></div>`})});
   $("parent").innerHTML=html;$("parent").hidden=false;
   requestAnimationFrame(()=>requestAnimationFrame(()=>{$("fg").style.strokeDashoffset=C*(1-pct/100)}))}
@@ -212,21 +212,25 @@ function detail(id,msg){
   const rs=ROWS.filter(r=>r.id===id).sort(bySort),s=rs[0];$("dlg").dataset.id=id;
   $("dlg").innerHTML=`<h2 style="margin:0">${esc(s.name)}</h2><span class="hint">รหัส ${esc(s.id)} · ${esc(s.cls)}</span>`+
    (msg?`<p style="background:var(--okbg);color:var(--ok);border-radius:12px;padding:8px 12px;margin:10px 0 0">${esc(msg)}</p>`:"")+'<div style="margin-top:12px">'+
-   rs.map(r=>{const t=r.edu+r.assoc,st=status(r.due,t);return`<div class="term"><b>${esc(r.year)} ภาคเรียนที่ ${esc(r.term)}</b><span class="r"><span class="tag ${st}">${LABEL[st]}</span></span><small>การศึกษา ${fmt(r.edu)} · สมาคม ${fmt(r.assoc)}</small><span class="r"><b>${r.due>0?"ค้าง "+fmt(r.due):"ครบแล้ว"}</b></span>`+
+   rs.map(r=>{const t=r.edu+r.assoc,st=status(r.due,t);return`<div class="term"><b>${esc(r.year)} ภาคเรียนที่ ${esc(r.term)}</b><span class="r"><span class="tag ${st}">${LABEL[st]}</span></span><small>การศึกษา ${fmt(r.edu)} · สมาคม ${fmt(r.assoc)} · จ่ายแล้ว ${fmt(r.paid)}</small><span class="r"><b>${r.due>0?"ค้าง "+fmt(r.due):"ครบแล้ว"}</b></span>`+
     (r.due>0?`<div style="grid-column:1/-1;text-align:right"><button class="btn ghost pay" data-y="${esc(r.year)}" data-t="${esc(r.term)}" style="padding:6px 14px">บันทึกการชำระ</button></div>`:"")+'</div>'}).join("")+
    '</div><button class="btn" style="width:100%;margin-top:6px" onclick="dlg.close()">ปิด</button>';
   if(!$("dlg").open)$("dlg").showModal()}
 function payForm(id,y,t){
   const r=ROWS.find(x=>x.id===id&&x.year===y&&x.term===t);
-  $("dlg").innerHTML=`<h2 style="margin:0">บันทึกการชำระ</h2><span class="hint">${esc(r.name)} · ปี ${esc(y)} ภาคเรียนที่ ${esc(t)} · ค้าง ${fmt(r.due)} บาท</span>
-  <form id="pf" style="margin-top:14px"><label class="fld"><span>จำนวนเงินที่ชำระ (บาท)</span><input id="pa" type="number" inputmode="decimal" min="1" max="${r.due}" step="any" value="${r.due}" required></label>
+  const fld=(k,label,due)=>due>0?`<label class="fld"><span>${label} (ค้าง ${fmt(due)} บาท)</span><input id="p_${k}" type="number" inputmode="decimal" min="0" max="${due}" step="any" value="${due}"></label>`:"";
+  $("dlg").innerHTML=`<h2 style="margin:0">บันทึกการชำระ</h2><span class="hint">${esc(r.name)} · ปี ${esc(y)} ภาคเรียนที่ ${esc(t)} · ค้างรวม ${fmt(r.due)} บาท</span>
+  <form id="pf" style="margin-top:14px">${fld("edu","บำรุงการศึกษา",r.dueEdu)}${fld("assoc","บำรุงสมาคม",r.dueAssoc)}
   <label class="fld"><span>เลขที่ใบเสร็จ</span><input id="pr" required></label>
   <label class="fld"><span>หมายเหตุ (ถ้ามี)</span><input id="pn"></label>
+  <p class="hint" style="margin:0">จ่ายบางส่วนได้ ใส่เฉพาะจำนวนที่รับมา ส่วนที่เหลือยังค้างอยู่</p>
   <p class="err" id="pe" role="alert"></p>
   <div style="display:flex;gap:10px"><button type="button" class="btn ghost" id="pc" style="flex:1">ยกเลิก</button><button class="btn" style="flex:1">บันทึก</button></div></form>`;
   $("pc").onclick=()=>detail(id);
-  $("pf").onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector(".btn:not(.ghost)");b.disabled=true;b.textContent="กำลังบันทึก...";
-   const res=await api({action:"pay",password:STAFFPW,id,year:y,term:t,amount:$("pa").value,receipt:$("pr").value.trim(),note:$("pn").value.trim()});
+  $("pf").onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector(".btn:not(.ghost)"),v=k=>$("p_"+k)?+$("p_"+k).value||0:0;
+   if(v("edu")+v("assoc")<=0){$("pe").textContent="กรอกจำนวนเงินอย่างน้อย 1 รายการ";return}
+   b.disabled=true;b.textContent="กำลังบันทึก...";
+   const res=await api({action:"pay",password:STAFFPW,id,year:y,term:t,edu:v("edu"),assoc:v("assoc"),receipt:$("pr").value.trim(),note:$("pn").value.trim()});
    if(!res.ok){$("pe").textContent=res.error;b.disabled=false;b.textContent="บันทึก";return}
    ROWS=ROWS.filter(x=>x.id!==id).concat(res.rows);render();detail(id,"บันทึกแล้ว ยอดค้างอัปเดตเรียบร้อย")}}
 function open_(e){const it=e.target.closest(".item");if(!it)return;if(e.type=="keydown"&&e.key!="Enter")return;detail(it.dataset.id)}
