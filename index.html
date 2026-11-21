@@ -83,6 +83,14 @@ dialog::backdrop{background:rgba(59,34,38,.5);backdrop-filter:blur(3px)}
 #login .err{color:#fff;background:rgba(0,0,0,.25);border-radius:14px;padding:9px 14px;margin:14px 0 0}
 #login .err:empty{display:none}
 .help{margin:22px 0 0;font-size:.88rem}
+textarea{width:100%;background:var(--bg);color:inherit;border:2px solid transparent;border-radius:14px;padding:12px;font:inherit;resize:vertical}
+.sh{margin:18px 4px 2px;font-weight:600}
+.sumrow{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:12px 4px;border-bottom:1px solid var(--line)}
+.sumrow:last-child{border:0}.sumrow small{color:var(--mute)}.sumrow .r{text-align:right}
+.pbar{grid-column:1/-1;height:8px;border-radius:9px;background:var(--duebg);overflow:hidden}.pbar i{display:block;height:100%;background:var(--ok)}
+.warn{background:var(--partbg);color:var(--part);border-radius:12px;padding:8px 12px;margin:10px 0;font-size:.88rem}
+.cr{margin:22px 0 0;text-align:center;font-size:.75rem;letter-spacing:.2px;color:var(--mute);opacity:.85}
+.lg .cr{color:#fff;opacity:.8}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media(max-width:420px){.bento{grid-template-columns:1fr 1fr}.ring{margin:0 auto}}
 </style>
@@ -115,6 +123,7 @@ dialog::backdrop{background:rgba(59,34,38,.5);backdrop-filter:blur(3px)}
     <button class="go">เข้าสู่ระบบ</button></form>
   <p class="err" id="err" role="alert"></p>
   <p class="help">ลืม PIN? ติดต่อฝ่ายการเงินของโรงเรียน</p>
+  <p class="cr">© 2569 Chamim Phongsopha · สงวนลิขสิทธิ์</p>
 </div></section>
 
 <section id="parent" hidden></section>
@@ -122,19 +131,24 @@ dialog::backdrop{background:rgba(59,34,38,.5);backdrop-filter:blur(3px)}
 <section id="staff" hidden>
   <div class="card"><div class="bento" id="stats"></div></div>
   <div class="card">
+    <div class="chips" id="views" style="margin-top:0"><button class="chip" data-v="list" aria-pressed="true">รายชื่อนักเรียน</button><button class="chip" data-v="sum" aria-pressed="false">สรุปรายห้อง / ระดับชั้น</button></div>
     <div class="filters">
-      <label class="fld"><span>ค้นหา</span><input type="search" id="q" placeholder="รหัสหรือชื่อนักเรียน"></label>
+      <label class="fld lf"><span>ค้นหา</span><input type="search" id="q" placeholder="รหัสหรือชื่อนักเรียน"></label>
       <label class="fld"><span>ภาคเรียน</span><select id="per"></select></label>
-      <label class="fld"><span>ชั้น</span><select id="cls"></select></label>
+      <label class="fld lf"><span>ชั้น</span><select id="cls"></select></label>
     </div>
-    <div class="chips" id="chips">
-      <button class="chip" data-s="" aria-pressed="true">ทั้งหมด</button><button class="chip" data-s="unpaid" aria-pressed="false">ยังไม่ชำระ</button>
-      <button class="chip" data-s="partial" aria-pressed="false">ชำระบางส่วน</button><button class="chip" data-s="paid" aria-pressed="false">ชำระครบ</button></div>
-    <div class="row" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span class="hint" id="count"></span><button class="btn ghost" id="exp">ส่งออกรายชื่อที่ค้าง</button></div>
-    <div class="list" id="list"></div>
+    <div id="listwrap">
+      <div class="chips" id="chips">
+        <button class="chip" data-s="" aria-pressed="true">ทั้งหมด</button><button class="chip" data-s="unpaid" aria-pressed="false">ยังไม่ชำระ</button>
+        <button class="chip" data-s="partial" aria-pressed="false">ชำระบางส่วน</button><button class="chip" data-s="paid" aria-pressed="false">ชำระครบ</button></div>
+      <div class="row" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span class="hint" id="count"></span><button class="btn ghost" id="exp">ส่งออกรายชื่อที่ค้าง</button></div>
+      <div class="list" id="list"></div>
+    </div>
+    <div id="sumwrap" hidden></div>
   </div>
 </section>
 <p style="text-align:center"><button class="btn ghost" id="out" hidden>ออกจากระบบ</button></p>
+<footer class="cr">© 2569 Chamim Phongsopha · สงวนลิขสิทธิ์</footer>
 </main>
 <dialog id="dlg"></dialog>
 
@@ -192,14 +206,19 @@ function showParent(){
 
 /* เจ้าหน้าที่ */
 let groups=[];
+const SCHOOL="โรงเรียนบางแก้วประชาสรรค์";let VIEW="list";
+function curTerm(){const d=new Date(),m=d.getMonth()+1,y=d.getFullYear()+543;return m>=5&&m<=10?y+"/1":(m<5?y-1:y)+"/2"}
 function showStaff(){
   const per=[...new Set(ROWS.map(r=>r.year+"/"+r.term))].sort().reverse();
   $("per").innerHTML='<option value="">รวมทุกภาคเรียน</option>'+per.map(p=>`<option>${p}</option>`).join("");
+  if(per.includes(curTerm()))$("per").value=curTerm();
   const cls=[...new Set(ROWS.map(r=>r.cls))].sort((a,b)=>a.localeCompare(b,"th",{numeric:true}));
   $("cls").innerHTML='<option value="">ทุกชั้น</option>'+cls.map(c=>`<option>${esc(c)}</option>`).join("");
+  VIEW="list";[...$("views").children].forEach(c=>c.setAttribute("aria-pressed",c.dataset.v=="list"));
   $("staff").hidden=false;render()}
 function group(){const p=$("per").value,m=new Map();
-  ROWS.filter(r=>!p||r.year+"/"+r.term===p).forEach(r=>{let g=m.get(r.id);if(!g)m.set(r.id,g={id:r.id,name:r.name,cls:r.cls,total:0,due:0});g.total+=r.edu+r.assoc;g.due+=r.due;g.cls=r.cls});
+  ROWS.filter(r=>!p||r.year+"/"+r.term===p).forEach(r=>{let g=m.get(r.id);if(!g)m.set(r.id,g={id:r.id,name:r.name,cls:r.cls,k:"",total:0,due:0,dueEdu:0,dueAssoc:0});
+   g.total+=r.edu+r.assoc;g.due+=r.due;g.dueEdu+=r.dueEdu;g.dueAssoc+=r.dueAssoc;const k=r.year+r.term;if(k>=g.k){g.k=k;g.cls=r.cls}});
   return[...m.values()].map(g=>({...g,st:status(g.due,g.total)}))}
 function render(){groups=group();
   const q=$("q").value.trim().toLowerCase(),c=$("cls").value;
@@ -207,10 +226,45 @@ function render(){groups=group();
   const n=k=>groups.filter(g=>g.st===k).length;
   $("stats").innerHTML=`<div class="tile wide"><small>ยอดค้างชำระรวม</small><b>${fmt(groups.reduce((a,g)=>a+g.due,0))} บาท</b></div>`+
    [["ชำระครบ","paid"],["ชำระบางส่วน","partial"],["ยังไม่ชำระ","unpaid"]].map(([l,k])=>`<div class="tile"><small>${l}</small><b>${fmt(n(k))}</b> <small style="display:inline">คน</small></div>`).join("");
+  const sm=VIEW==="sum";$("listwrap").hidden=sm;$("sumwrap").hidden=!sm;document.querySelectorAll(".lf").forEach(x=>x.hidden=sm);
+  if(sm){renderSummary();return}
   $("count").textContent=`พบ ${fmt(f.length)} จาก ${fmt(groups.length)} คน`+(f.length>100?" · แสดง 100 แรก":"");
   $("list").innerHTML=f.slice(0,100).map(g=>`<div class="item" tabindex="0" data-id="${esc(g.id)}"><div class="av" style="background:${color(g.name)}">${esc([...g.name.replace(/^(เด็กชาย|เด็กหญิง|นาย|นางสาว|ด\.ช\.|ด\.ญ\.)\s*/,"")][0]||"?")}</div>
    <div class="m"><b>${esc(g.name)}</b><span class="hint">${esc(g.id)} · ${esc(g.cls)}</span></div>
    <div class="r"><b>${g.due>0?fmt(g.due):"–"}</b><span class="tag ${g.st}">${LABEL[g.st]}</span></div></div>`).join("")||'<p class="hint" style="text-align:center;padding:24px 0">ไม่พบนักเรียนที่ตรงกับการค้นหา</p>'}
+/* สรุปรายห้อง / ระดับชั้น / ทั้งโรงเรียน */
+function agg(a){const n=a.length,p=a.filter(g=>g.st==="paid").length;return{n,p,d:n-p,due:a.reduce((s,g)=>s+g.due,0),pp:n?p/n*100:0}}
+const pct=x=>(Math.round(x*10)/10).toLocaleString("th-TH")+"%";
+function srow(label,a,room){return`<div class="sumrow"><b>${esc(label)}</b><span class="r">${a.d>0?`<span class="tag unpaid">ค้าง ${fmt(a.d)} คน</span>`:'<span class="tag paid">จ่ายครบทุกคน</span>'}</span>
+  <small>จ่ายครบ ${fmt(a.p)} จาก ${fmt(a.n)} คน · จ่ายครบ ${pct(a.pp)} · ค้าง ${pct(100-a.pp)}</small><span class="r"><b>${fmt(a.due)}</b> <small>บาท</small></span>
+  <div class="pbar"><i style="width:${a.pp}%"></i></div>${room&&a.d>0?`<div style="grid-column:1/-1;text-align:right"><button class="btn ghost msg" data-room="${esc(room)}" style="padding:5px 14px">คัดลอกข้อความแจ้งครูที่ปรึกษา</button></div>`:""}</div>`}
+function renderSummary(){
+  const nat=(a,b)=>a.localeCompare(b,"th",{numeric:true}),by=f=>{const m={};groups.forEach(g=>{(m[f(g)]=m[f(g)]||[]).push(g)});return m};
+  const rooms=by(g=>g.cls),lv=by(g=>g.cls.split("/")[0]);
+  let o=`<p class="hint">${plabel()==="ทุกภาคเรียน"?"รวมทุกภาคเรียน":plabel()} · "ค้าง" นับรวมคนที่ชำระบางส่วน</p>`;
+  if(!READONLY){o+='<div class="sh">ทั้งโรงเรียน</div>'+srow("ทั้งโรงเรียน",agg(groups))+'<div class="sh">รายระดับชั้น</div>'+Object.keys(lv).sort(nat).map(k=>srow(k,agg(lv[k]))).join("")}
+  o+='<div class="sh">รายห้อง</div>'+Object.keys(rooms).sort(nat).map(k=>srow(k,agg(rooms[k]),k)).join("");
+  $("sumwrap").innerHTML=o}
+$("sumwrap").addEventListener("click",e=>{const b=e.target.closest(".msg");if(b)showMsg("ข้อความแจ้งครูที่ปรึกษา "+b.dataset.room,roomMsg(b.dataset.room),"ข้อความนี้มีชื่อและยอดค้างของนักเรียนหลายคน ส่งให้ครูที่ปรึกษาเท่านั้น ห้ามส่งเข้ากลุ่มผู้ปกครอง ให้ครูแจ้งผู้ปกครองเป็นรายบุคคล (ในหน้ารายละเอียดนักเรียนมีข้อความสำหรับผู้ปกครองแต่ละคน)")});
+$("views").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;VIEW=b.dataset.v;[...$("views").children].forEach(c=>c.setAttribute("aria-pressed",c===b));render()});
+/* ข้อความสำหรับคัดลอก */
+function plabel(){const p=$("per").value;if(!p)return"ทุกภาคเรียน";const[y,t]=p.split("/");return`ภาคเรียนที่ ${t}/${y}`}
+function roomMsg(room){
+  const all=groups.filter(g=>g.cls===room),f=all.filter(g=>g.due>0).sort((a,b)=>a.id.localeCompare(b.id,"th",{numeric:true}));
+  const head=`แจ้งรายชื่อนักเรียนค้างชำระค่าเทอม\n${SCHOOL}\nชั้น ${room} · ${plabel()}\n`;
+  if(!f.length)return head+"ไม่มีนักเรียนค้างชำระ ขอบคุณค่ะ";
+  return head+`ค้างชำระ ${fmt(f.length)} คน จากทั้งหมด ${fmt(all.length)} คน\n\n`+f.map((g,i)=>`${i+1}. ${g.name} (${g.id}) ค้าง ${fmt(g.due)} บาท`).join("\n")+`\n\nรวมค้างชำระ ${fmt(f.reduce((a,g)=>a+g.due,0))} บาท\n\nรบกวนครูที่ปรึกษาแจ้งผู้ปกครองเป็นรายบุคคล ขอบคุณค่ะ`}
+function studentMsg(id){
+  const p=$("per").value,rs=ROWS.filter(r=>r.id===id&&r.due>0&&(!p||r.year+"/"+r.term===p)).sort((a,b)=>(a.year+a.term).localeCompare(b.year+b.term));
+  const s=ROWS.find(r=>r.id===id);
+  const lines=rs.map(r=>`• ภาคเรียนที่ ${r.term}/${r.year}: `+[r.dueEdu>0?`บำรุงการศึกษา ${fmt(r.dueEdu)} บาท`:"",r.dueAssoc>0?`บำรุงสมาคม ${fmt(r.dueAssoc)} บาท`:""].filter(Boolean).join(" + "));
+  return`เรียน ผู้ปกครองของ ${s.name} ชั้น ${rs.length?rs[rs.length-1].cls:s.cls}\n${SCHOOL}ขอแจ้งยอดค่าเทอมที่ค้างชำระ\n${lines.join("\n")}\nรวมทั้งสิ้น ${fmt(rs.reduce((a,r)=>a+r.due,0))} บาท\n\nขอความอนุเคราะห์ชำระที่ฝ่ายการเงินของโรงเรียน หากชำระแล้วขออภัย และโปรดแจ้งครูที่ปรึกษา ขอบคุณค่ะ`}
+function showMsg(title,text,hint,back){
+  $("dlg").innerHTML=`<h2 style="margin:0;font-size:1.15rem">${esc(title)}</h2><p class="warn">${esc(hint)}</p><textarea id="mt" rows="13">${esc(text)}</textarea>
+  <div style="display:flex;gap:10px;margin-top:10px"><button class="btn ghost" id="bk" style="flex:1">${back?"กลับ":"ปิด"}</button><button class="btn" id="cp" style="flex:1">คัดลอก</button></div>`;
+  $("bk").onclick=()=>back?detail(back):$("dlg").close();
+  $("cp").onclick=async()=>{const v=$("mt").value;try{await navigator.clipboard.writeText(v)}catch{$("mt").select();document.execCommand("copy")}$("cp").textContent="คัดลอกแล้ว ✓"};
+  if(!$("dlg").open)$("dlg").showModal()}
 ["q","per","cls"].forEach(i=>$(i).addEventListener("input",render));
 $("chips").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;ST=b.dataset.s;[...$("chips").children].forEach(c=>c.setAttribute("aria-pressed",c===b));render()});
 let STAFFPW="",READONLY=false;
@@ -220,27 +274,29 @@ function detail(id,msg){
    (msg?`<p style="background:var(--okbg);color:var(--ok);border-radius:12px;padding:8px 12px;margin:10px 0 0">${esc(msg)}</p>`:"")+'<div style="margin-top:12px">'+
    rs.map(r=>{const t=r.edu+r.assoc,st=status(r.due,t);return`<div class="term"><b>${esc(r.year)} ภาคเรียนที่ ${esc(r.term)}</b><span class="r"><span class="tag ${st}">${LABEL[st]}</span></span><small>การศึกษา ${fmt(r.edu)} · สมาคม ${fmt(r.assoc)} · จ่ายแล้ว ${fmt(r.paid)}</small><span class="r"><b>${r.due>0?"ค้าง "+fmt(r.due):"ครบแล้ว"}</b></span>`+
     (r.due>0&&!READONLY?`<div style="grid-column:1/-1;text-align:right"><button class="btn ghost pay" data-y="${esc(r.year)}" data-t="${esc(r.term)}" style="padding:6px 14px">บันทึกการชำระ</button></div>`:"")+'</div>'}).join("")+
-   '</div><button class="btn" style="width:100%;margin-top:6px" onclick="dlg.close()">ปิด</button>';
+   '</div>'+(rs.some(r=>r.due>0&&(!$("per").value||r.year+"/"+r.term===$("per").value))?'<button class="btn ghost msgs" style="width:100%;margin-top:6px">คัดลอกข้อความแจ้งผู้ปกครอง</button>':'')+'<button class="btn" style="width:100%;margin-top:6px" onclick="dlg.close()">ปิด</button>';
   if(!$("dlg").open)$("dlg").showModal()}
 function payForm(id,y,t){
   const r=ROWS.find(x=>x.id===id&&x.year===y&&x.term===t);
-  const fld=(k,label,due)=>due>0?`<label class="fld"><span>${label} (ค้าง ${fmt(due)} บาท)</span><input id="p_${k}" type="number" inputmode="decimal" min="0" max="${due}" step="any" value="${due}"></label>`:"";
+  const fld=(k,label,due)=>due>0?`<label class="fld"><span>${label} (ค้าง ${fmt(due)} บาท)</span><input id="p_${k}" type="number" inputmode="decimal" min="0" max="${due}" step="any" value="${due}"></label>
+  <label class="fld"><span>เลขที่ใบเสร็จ${label}</span><input id="pr_${k}" autocomplete="off"></label>`:"";
   $("dlg").innerHTML=`<h2 style="margin:0">บันทึกการชำระ</h2><span class="hint">${esc(r.name)} · ปี ${esc(y)} ภาคเรียนที่ ${esc(t)} · ค้างรวม ${fmt(r.due)} บาท</span>
   <form id="pf" style="margin-top:14px">${fld("edu","บำรุงการศึกษา",r.dueEdu)}${fld("assoc","บำรุงสมาคม",r.dueAssoc)}
-  <label class="fld"><span>เลขที่ใบเสร็จ</span><input id="pr" required></label>
   <label class="fld"><span>หมายเหตุ (ถ้ามี)</span><input id="pn"></label>
   <p class="hint" style="margin:0">จ่ายบางส่วนได้ ใส่เฉพาะจำนวนที่รับมา ส่วนที่เหลือยังค้างอยู่</p>
   <p class="err" id="pe" role="alert"></p>
   <div style="display:flex;gap:10px"><button type="button" class="btn ghost" id="pc" style="flex:1">ยกเลิก</button><button class="btn" style="flex:1">บันทึก</button></div></form>`;
   $("pc").onclick=()=>detail(id);
-  $("pf").onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector(".btn:not(.ghost)"),v=k=>$("p_"+k)?+$("p_"+k).value||0:0;
+  $("pf").onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector(".btn:not(.ghost)"),v=k=>$("p_"+k)?+$("p_"+k).value||0:0,rv=k=>$("pr_"+k)?$("pr_"+k).value.trim():"";
    if(v("edu")+v("assoc")<=0){$("pe").textContent="กรอกจำนวนเงินอย่างน้อย 1 รายการ";return}
+   if((v("edu")>0&&!rv("edu"))||(v("assoc")>0&&!rv("assoc"))){$("pe").textContent="กรอกเลขที่ใบเสร็จให้ครบทุกรายการที่รับเงิน";return}
    b.disabled=true;b.textContent="กำลังบันทึก...";
-   const res=await api({action:"pay",password:STAFFPW,id,year:y,term:t,edu:v("edu"),assoc:v("assoc"),receipt:$("pr").value.trim(),note:$("pn").value.trim()});
+   const res=await api({action:"pay",password:STAFFPW,id,year:y,term:t,edu:v("edu"),assoc:v("assoc"),receiptEdu:rv("edu"),receiptAssoc:rv("assoc"),note:$("pn").value.trim()});
    if(!res.ok){$("pe").textContent=res.error;b.disabled=false;b.textContent="บันทึก";return}
    ROWS=ROWS.filter(x=>x.id!==id).concat(res.rows);render();detail(id,"บันทึกแล้ว ยอดค้างอัปเดตเรียบร้อย")}}
 function open_(e){const it=e.target.closest(".item");if(!it)return;if(e.type=="keydown"&&e.key!="Enter")return;detail(it.dataset.id)}
-$("dlg").addEventListener("click",e=>{const b=e.target.closest(".pay");if(b)payForm($("dlg").dataset.id,b.dataset.y,b.dataset.t)});
+$("dlg").addEventListener("click",e=>{const id=$("dlg").dataset.id,b=e.target.closest(".pay");if(b)return payForm(id,b.dataset.y,b.dataset.t);
+  if(e.target.closest(".msgs"))showMsg("ข้อความแจ้งผู้ปกครอง",studentMsg(id),"ส่งให้ผู้ปกครองรายบุคคลเท่านั้น ตรวจข้อความก่อนส่ง แก้ไขในช่องได้",id)});
 $("list").addEventListener("click",open_);$("list").addEventListener("keydown",open_);
 $("exp").onclick=()=>{const f=groups.filter(g=>g.due>0);
   const csv="\uFEFFรหัส,ชื่อ-สกุล,ชั้น,ค้างชำระ\n"+f.map(g=>[g.id,'"'+g.name+'"',g.cls,g.due].join(",")).join("\n");
